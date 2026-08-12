@@ -1,5 +1,6 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from streamlit_mic_recorder import speech_to_text
 from github import Github
 from gtts import gTTS
@@ -85,41 +86,16 @@ else:
         return ["GitHub Token not configured in Streamlit Secrets."]
 
     # ---------------------------------------------------------
-    # 5. MAIN INTERFACE & GEMINI DYNAMIC SETUP
+    # 5. MAIN INTERFACE & GEMINI SETUP (NEW GOOGLE-GENAI SDK)
     # ---------------------------------------------------------
-    st.title("🤖 Andru - Personal AI Assistant (Gemini Powered)")
+    st.title("🤖 Andru - Personal AI Assistant")
     
     if "GEMINI_API_KEY" not in st.secrets:
         st.error("Please add GEMINI_API_KEY to Streamlit Secrets!")
         st.stop()
 
-    # Configure Gemini API with REST transport
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"], transport='rest')
-
-    # Dynamically select an active Flash model to prevent 404 errors
-    @st.cache_resource
-    def get_working_model():
-        try:
-            available_models = [
-                m.name for m in genai.list_models() 
-                if 'generateContent' in m.supported_generation_methods
-            ]
-            # Search for available flash models
-            flash_models = [m for m in available_models if 'flash' in m]
-            if flash_models:
-                return flash_models[0]
-            elif available_models:
-                return available_models[0]
-        except Exception:
-            pass
-        return "models/gemini-2.5-flash"
-
-    active_model_name = get_working_model()
-
-    model = genai.GenerativeModel(
-        model_name=active_model_name,
-        system_instruction=ANDRU_SYSTEM_PROMPT
-    )
+    # Initialize new Google GenAI Client
+    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -156,13 +132,24 @@ else:
 
         with st.chat_message("assistant"):
             try:
-                chat_history = []
-                for m in st.session_state.messages[:-1]:
+                # Format conversation history for new SDK
+                contents = []
+                for m in st.session_state.messages:
                     role = "user" if m["role"] == "user" else "model"
-                    chat_history.append({"role": role, "parts": [m["content"]]})
-                
-                chat = model.start_chat(history=chat_history)
-                response = chat.send_message(user_prompt)
+                    contents.append(
+                        types.Content(
+                            role=role,
+                            parts=[types.Part.from_text(text=m["content"])]
+                        )
+                    )
+
+                response = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=ANDRU_SYSTEM_PROMPT,
+                    ),
+                )
                 
                 reply = response.text
                 st.markdown(reply)
