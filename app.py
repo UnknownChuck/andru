@@ -57,49 +57,7 @@ def play_voice(text):
         st.error(f"Voice Generation Error: {e}")
 
 # ---------------------------------------------------------
-# 3. HELPER FOR GEMINI GENERATION WITH DYNAMIC FALLBACK
-# ---------------------------------------------------------
-def generate_with_fallback(client, contents, system_prompt):
-    """Dynamically finds an active model or tries safe fallbacks to avoid 404 errors."""
-    models_to_try = []
-    
-    # 1. Try to query available models dynamically
-    try:
-        all_models = [
-            m.name for m in client.models.list() 
-            if hasattr(m, 'supported_generation_methods') and 'generateContent' in m.supported_generation_methods
-        ]
-        flash_models = [m for m in all_models if 'flash' in m]
-        models_to_try = flash_models + all_models
-    except Exception:
-        pass
-
-    # 2. Add standard static fallback models if dynamic fetch fails
-    models_to_try.extend(["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"])
-    
-    # Remove duplicates preserving order
-    seen = set()
-    unique_models = [x for x in models_to_try if not (x in seen or seen.add(x))]
-
-    last_err = None
-    for model_name in unique_models:
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                ),
-            )
-            return response.text
-        except Exception as e:
-            last_err = e
-            continue
-            
-    raise last_err
-
-# ---------------------------------------------------------
-# 4. SECURITY GATE
+# 3. SECURITY GATE
 # ---------------------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -115,7 +73,7 @@ if not st.session_state.authenticated:
             st.error("Wrong password! Access Denied.")
 else:
     # ---------------------------------------------------------
-    # 5. GITHUB INTEGRATION
+    # 4. GITHUB INTEGRATION
     # ---------------------------------------------------------
     def fetch_github_repos():
         if "GITHUB_TOKEN" in st.secrets:
@@ -128,7 +86,7 @@ else:
         return ["GitHub Token not configured in Streamlit Secrets."]
 
     # ---------------------------------------------------------
-    # 6. MAIN INTERFACE & GEMINI SETUP
+    # 5. MAIN INTERFACE & GEMINI CLIENT (FORCE V1 API)
     # ---------------------------------------------------------
     st.title("🤖 Andru - Personal AI Assistant")
     
@@ -136,7 +94,11 @@ else:
         st.error("Please add GEMINI_API_KEY to Streamlit Secrets!")
         st.stop()
 
-    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+    # Explicitly use api_version='v1' to avoid v1beta 404 errors
+    client = genai.Client(
+        api_key=st.secrets["GEMINI_API_KEY"],
+        http_options={'api_version': 'v1'}
+    )
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -184,9 +146,16 @@ else:
                         )
                     )
 
-                # Generate response using auto-fallback
-                reply = generate_with_fallback(client, contents, ANDRU_SYSTEM_PROMPT)
+                # Send request using standard stable model
+                response = client.models.generate_content(
+                    model='gemini-1.5-flash',
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=ANDRU_SYSTEM_PROMPT,
+                    ),
+                )
                 
+                reply = response.text
                 st.markdown(reply)
                 play_voice(reply)
 
