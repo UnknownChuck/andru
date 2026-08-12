@@ -1,8 +1,5 @@
 streamlit
-groq
+google-generativeai
 PyGithub
-google-api-python-client
-google-auth-httplib2
-google-auth-oauthlib
 streamlit-mic-recorder
 gTTS
