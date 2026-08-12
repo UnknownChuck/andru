@@ -25,13 +25,11 @@ You are "Andru", an advanced, intelligent, witty, and private personal AI assist
 def play_voice(text):
     try:
         has_sinhala = any('\u0D80' <= c <= '\u0DFF' for c in text)
-        lang_code = 'si' if has_sinhala => 'en' else 'en'
+        lang_code = 'si' if has_sinhala else 'en'
         
-        # Note: gTTS doesn't have an explicit male voice flag, but using 'en-uk' or 'en-au' 
-        # with specific clean text gives a lower/deeper tone, and we use HTML audio boost for volume.
         tld_choice = 'co.uk' if lang_code == 'en' else 'lk'
         
-        tts = gTTS(text=text, lang='en' if lang_code=='en' else 'si', tld=tld_choice, slow=False)
+        tts = gTTS(text=text, lang=lang_code, tld=tld_choice, slow=False)
         fp = io.BytesIO()
         tts.write_to_fp(fp)
         fp.seek(0)
@@ -39,7 +37,6 @@ def play_voice(text):
         audio_bytes = fp.read()
         audio_b64 = base64.b64encode(audio_bytes).decode()
         
-        # HTML audio tag configured with max volume boost and clean display
         md = f"""
             <audio autoplay controls style="width: 100%; height: 35px;">
             <source src="data:audio/mp3;base64,{audio_b64}" type="audio/mp3">
