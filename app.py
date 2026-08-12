@@ -3,8 +3,8 @@ from groq import Groq
 
 st.set_page_config(page_title="Andru AI", page_icon="🤖")
 
-# 1. Lock එක (Password Gate)
-if "authenticated" not in st.sessions:
+# 1. Lock එක (Password Gate - Fixed st.session_state)
+if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
@@ -20,18 +20,18 @@ else:
     # 2. Andru ගේ Chat Screen එක
     st.title("🤖 Hello! I am Andru")
     
-    # Groq Key එක රහසිගතව ගන්නවා
+    # Groq Key එක Secrets වලින් ලබාගැනීම
     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # පරණ කතා ටික පෙන්නනවා
+    # පරණ Messages පෙන්නීම
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # ඔයා ටයිප් කරන එක Andru ට යවනවා
+    # User Input & Response
     if prompt := st.chat_input("Talk to Andru..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
