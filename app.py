@@ -1,38 +1,34 @@
 import streamlit as st
 from groq import Groq
-from streamlit_mic_recorder import speech_to_text
 from github import Github
 from gtts import gTTS
 import io
 import base64
+import json
+import os
 
 # Page Configuration
 st.set_page_config(page_title="Andru Private AI", page_icon="🤖", layout="wide")
 
 # ---------------------------------------------------------
-# 1. ANDRU SYSTEM PROMPT (LANGUAGE & SPELLING TOLERANCE)
+# 1. ANDRU SYSTEM PROMPT (WITH MEMORY & RESEARCH CAPABILITIES)
 # ---------------------------------------------------------
 ANDRU_SYSTEM_PROMPT = """
-You are "Andru", a highly intelligent, witty, smooth-talking, and private personal AI assistant.
-
-### Context Understanding & Robustness Instructions:
-- You are extremely adaptable to any language (English, Singlish, Sinhala, etc.).
-- You MUST understand the user even if there are severe spelling mistakes, typos, or slang. Always grasp the underlying intent smoothly without complaining about grammar or spelling.
-- Keep responses conversational, concise, natural, and straight to the point (ideal for voice output).
-
-### Key User Profile:
-- User Name: Chenuka Basilu
-- Your Role: Chenuka's personal assistant and close friend.
-- User Focus Areas: Game Dev (HTML/JS/3D), Blender 3D, Cybersecurity (Nmap/Hashcat), System Tuning, Creative Writing ("FOL: Reborn").
+You are "Andru", an advanced, intelligent, witty, and private personal AI assistant for Chenuka Basilu.
+- Adaptable to any language (Sinhala, Singlish, English). Understand severe typos and spelling mistakes smoothly.
+- You remember context, conduct research, and can help save files directly to Chenuka's GitHub repository when requested.
+- Keep responses conversational, natural, and precise.
 """
 
 # ---------------------------------------------------------
-# 2. RELIABLE AUDIO PLAYER
+# 2. AUDIO PLAYER (MULTILINGUAL)
 # ---------------------------------------------------------
 def play_voice(text):
-    """Generates audio using gTTS and plays it automatically using HTML5 base64 audio."""
     try:
-        tts = gTTS(text=text, lang='en', tld='co.uk', slow=False)
+        has_sinhala = any('\u0D80' <= c <= '\u0DFF' for c in text)
+        lang_code = 'si' if has_sinhala else 'en'
+        
+        tts = gTTS(text=text, lang=lang_code, slow=False)
         fp = io.BytesIO()
         tts.write_to_fp(fp)
         fp.seek(0)
@@ -67,20 +63,31 @@ if not st.session_state.authenticated:
             st.error("Wrong password! Access Denied.")
 else:
     # ---------------------------------------------------------
-    # 4. GITHUB INTEGRATION
+    # 4. GITHUB TOOLS (Save files directly to repo)
     # ---------------------------------------------------------
-    def fetch_github_repos():
+    def save_file_to_github(file_path, file_content, commit_message):
         if "GITHUB_TOKEN" in st.secrets:
             try:
                 g = Github(st.secrets["GITHUB_TOKEN"])
                 user = g.get_user()
-                return [repo.name for repo in user.get_repos()]
+                # Assuming repo name is 'andru' or target repo
+                repo = user.get_repo("andru") 
+                
+                try:
+                    # Check if file exists, if so update it
+                    contents = repo.get_contents(file_path)
+                    repo.update_file(contents.path, commit_message, file_content, contents.sha)
+                    return True, f"Successfully updated {file_path} on GitHub!"
+                except:
+                    # Otherwise create new file
+                    repo.create_file(file_path, commit_message, file_content)
+                    return True, f"Successfully created {file_path} on GitHub!"
             except Exception as e:
-                return [f"GitHub Error: {e}"]
-        return ["GitHub Token not configured in Streamlit Secrets."]
+                return False, f"GitHub Error: {e}"
+        return False, "GITHUB_TOKEN not found."
 
     # ---------------------------------------------------------
-    # 5. MAIN INTERFACE & GROQ SETUP
+    # 5. MAIN INTERFACE
     # ---------------------------------------------------------
     st.title("🤖 Andru - Personal AI Assistant")
     
@@ -88,13 +95,11 @@ else:
         st.error("Please add GROQ_API_KEY to Streamlit Secrets!")
         st.stop()
 
-    # Initialize Groq Client
     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Display Chat History
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
@@ -104,21 +109,51 @@ else:
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("📁 Check My GitHub Repositories"):
-            repos = fetch_github_repos()
-            st.info(f"Your Repositories: {', '.join(repos)}")
+        # Manual file saver UI
+        with st.expander("📁 Save Code/Notes to GitHub Repo"):
+            file_name = st.text_input("File Name (e.g., notes.py):")
+            file_content = st.text_area("File Content:")
+            if st.button("Commit to GitHub"):
+                if file_name and file_content:
+                    success, msg = save_file_to_github(file_name, file_content, f"Added {file_name} via Andru AI")
+                    if success: st.success(msg)
+                    else: st.error(msg)
+                else:
+                    st.warning("Please fill both fields.")
             
     with col2:
         st.write("🎤 **Voice Input:**")
-        voice_text = speech_to_text(language='en', start_prompt="🎙️ Start Speaking", stop_prompt="⏹️ Stop & Send", key='voice_input')
+        speech_html = """
+        <script>
+        function startDictation() {
+            if (window.hasOwnProperty('webkitSpeechRecognition')) {
+                var recognition = new webkitSpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = "si-LK";
+                recognition.start();
+                document.getElementById('status').innerText = "🎙️ කතා කරන්න...";
 
-    # Text Input
-    text_text = st.chat_input("Talk or give commands to Andru...")
+                recognition.onresult = function(e) {
+                    var transcript = e.results[0][0].transcript;
+                    recognition.stop();
+                    document.getElementById('status').innerText = "✅ සාර්ථකයි!";
+                    const input = window.parent.document.querySelector('textarea[aria-label="Talk or give commands to Andru..."]');
+                    if (input) {
+                        input.value = transcript;
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                };
+            }
+        }
+        </script>
+        <button onclick="startDictation()" style="background-color: #ff4b4b; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold;">🎙️ Click & Speak</button>
+        <p id="status" style="margin-top:5px; font-size:12px; color:#888;"></p>
+        """
+        st.components.v1.html(speech_html, height=100)
 
-    # Determine Active Input
-    user_prompt = voice_text if voice_text else text_text
+    user_prompt = st.chat_input("Talk or give commands to Andru...")
 
-    # Process AI Response
     if user_prompt:
         st.session_state.messages.append({"role": "user", "content": user_prompt})
         with st.chat_message("user"):
@@ -128,7 +163,6 @@ else:
             try:
                 sys_prompt = {"role": "system", "content": ANDRU_SYSTEM_PROMPT}
                 
-                # Using Llama-3.3-70b for ultimate accuracy, spelling tolerance and speed
                 response = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[sys_prompt] + st.session_state.messages
@@ -136,7 +170,6 @@ else:
                 
                 reply = response.choices[0].message.content
                 st.markdown(reply)
-                
                 play_voice(reply)
 
                 st.session_state.messages.append({"role": "assistant", "content": reply})
