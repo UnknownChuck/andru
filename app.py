@@ -85,7 +85,7 @@ else:
         return ["GitHub Token not configured in Streamlit Secrets."]
 
     # ---------------------------------------------------------
-    # 5. MAIN INTERFACE & GEMINI SETUP
+    # 5. MAIN INTERFACE & GEMINI DYNAMIC SETUP
     # ---------------------------------------------------------
     st.title("🤖 Andru - Personal AI Assistant (Gemini Powered)")
     
@@ -93,11 +93,31 @@ else:
         st.error("Please add GEMINI_API_KEY to Streamlit Secrets!")
         st.stop()
 
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    
-    # Updated Gemini model name to gemini-2.0-flash
+    # Configure Gemini API with REST transport
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"], transport='rest')
+
+    # Dynamically select an active Flash model to prevent 404 errors
+    @st.cache_resource
+    def get_working_model():
+        try:
+            available_models = [
+                m.name for m in genai.list_models() 
+                if 'generateContent' in m.supported_generation_methods
+            ]
+            # Search for available flash models
+            flash_models = [m for m in available_models if 'flash' in m]
+            if flash_models:
+                return flash_models[0]
+            elif available_models:
+                return available_models[0]
+        except Exception:
+            pass
+        return "models/gemini-2.5-flash"
+
+    active_model_name = get_working_model()
+
     model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash",
+        model_name=active_model_name,
         system_instruction=ANDRU_SYSTEM_PROMPT
     )
 
