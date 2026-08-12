@@ -1,14 +1,16 @@
 import streamlit as st
-import streamlit.components.v1 as components
 from groq import Groq
 from streamlit_mic_recorder import speech_to_text
 from github import Github
+from gtts import gTTS
+import io
+import base64
 
 # Page Configuration
 st.set_page_config(page_title="Andru Private AI", page_icon="🤖", layout="wide")
 
 # ---------------------------------------------------------
-# 1. ANDRU SYSTEM PROMPT & PERSONAL KNOWLEDGE BASE
+# 1. ANDRU SYSTEM PROMPT
 # ---------------------------------------------------------
 ANDRU_SYSTEM_PROMPT = """
 You are "Andru", a highly intelligent, witty, smooth-talking, and private personal AI assistant.
@@ -26,12 +28,38 @@ You are "Andru", a highly intelligent, witty, smooth-talking, and private person
 
 ### Response Instructions:
 - Speak directly to Chenuka in a friendly, intelligent, and natural tone.
-- When answering via voice, keep responses concise, highly structured, and conversational.
-- Actively assist with code, project architecture, email summaries, and GitHub repository checks.
+- Keep responses short, clear, and natural for voice synthesis.
 """
 
 # ---------------------------------------------------------
-# 2. SECURITY GATE (PASSWORD CHECK)
+# 2. AUDIO PLAYER FUNCTION (RELIABLE VOICE OUTPUT)
+# ---------------------------------------------------------
+def play_voice(text):
+    """Generates audio using gTTS and plays it automatically using HTML5 base64 audio."""
+    try:
+        # Create audio in memory
+        tts = gTTS(text=text, lang='en', tld='co.uk', slow=False)
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        
+        # Encode to Base64
+        audio_bytes = fp.read()
+        audio_b64 = base64.b64encode(audio_bytes).decode()
+        
+        # Auto-playing Audio element
+        md = f"""
+            <audio autoplay style="width: 100%;">
+            <source src="data:audio/mp3;base64,{audio_b64}" type="audio/mp3">
+            Your browser does not support the audio element.
+            </audio>
+            """
+        st.components.v1.html(md, height=50)
+    except Exception as e:
+        st.error(f"Voice Generation Error: {e}")
+
+# ---------------------------------------------------------
+# 3. SECURITY GATE
 # ---------------------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -47,35 +75,9 @@ if not st.session_state.authenticated:
             st.error("Wrong password! Access Denied.")
 else:
     # ---------------------------------------------------------
-    # 3. HELPER FUNCTIONS (TTS & GITHUB INTEGRATION)
+    # 4. GITHUB INTEGRATION
     # ---------------------------------------------------------
-    def speak_text_web(text):
-        """Injects HTML5/JS Web Speech API for high volume, smooth, realistic human voice."""
-        clean_text = text.replace('"', '\\"').replace("'", "\\'").replace('\n', ' ')
-        js_code = f"""
-        <script>
-            if ('speechSynthesis' in window) {{
-                window.speechSynthesis.cancel();
-                var msg = new SpeechSynthesisUtterance("{clean_text}");
-                msg.volume = 1.0;  // Maximum Volume
-                msg.rate = 1.0;    // Natural Speed
-                msg.pitch = 1.0;   # Human Pitch
-                
-                var voices = window.speechSynthesis.getVoices();
-                for (var i = 0; i < voices.length; i++) {{
-                    if (voices[i].lang.includes('en') || voices[i].lang.includes('en-US')) {{
-                        msg.voice = voices[i];
-                        break;
-                    }}
-                }}
-                window.speechSynthesis.speak(msg);
-            }}
-        </script>
-        """
-        components.html(js_code, height=0, width=0)
-
     def fetch_github_repos():
-        """Fetches repositories if GITHUB_TOKEN is provided in Secrets."""
         if "GITHUB_TOKEN" in st.secrets:
             try:
                 g = Github(st.secrets["GITHUB_TOKEN"])
@@ -86,7 +88,7 @@ else:
         return ["GitHub Token not configured in Streamlit Secrets."]
 
     # ---------------------------------------------------------
-    # 4. MAIN INTERFACE
+    # 5. MAIN INTERFACE
     # ---------------------------------------------------------
     st.title("🤖 Andru - Personal AI Assistant")
     
@@ -122,12 +124,10 @@ else:
 
     # Process AI Response
     if user_prompt:
-        # User Message
         st.session_state.messages.append({"role": "user", "content": user_prompt})
         with st.chat_message("user"):
             st.markdown(user_prompt)
 
-        # Assistant Message
         with st.chat_message("assistant"):
             sys_prompt = {"role": "system", "content": ANDRU_SYSTEM_PROMPT}
             
@@ -139,7 +139,7 @@ else:
             reply = response.choices[0].message.content
             st.markdown(reply)
             
-            # Auto-play high quality smooth Voice
-            speak_text_web(reply)
+            # Reliable Audio Output Call
+            play_voice(reply)
 
         st.session_state.messages.append({"role": "assistant", "content": reply})
