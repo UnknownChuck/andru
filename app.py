@@ -85,23 +85,19 @@ else:
         return ["GitHub Token not configured in Streamlit Secrets."]
 
     # ---------------------------------------------------------
-    # 5. MAIN INTERFACE & GEMINI SETUP (WITH REST FIX)
+    # 5. MAIN INTERFACE & GEMINI SETUP
     # ---------------------------------------------------------
     st.title("🤖 Andru - Personal AI Assistant (Gemini Powered)")
     
-    # Check Secrets
     if "GEMINI_API_KEY" not in st.secrets:
         st.error("Please add GEMINI_API_KEY to Streamlit Secrets!")
         st.stop()
 
-    # Configure Gemini API with REST protocol (Fixes Streamlit gRPC error)
-    genai.configure(
-        api_key=st.secrets["GEMINI_API_KEY"],
-        transport='rest'
-    )
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     
+    # Updated Gemini model name to gemini-2.0-flash
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
+        model_name="gemini-2.0-flash",
         system_instruction=ANDRU_SYSTEM_PROMPT
     )
 
@@ -140,7 +136,6 @@ else:
 
         with st.chat_message("assistant"):
             try:
-                # Format chat history for Gemini
                 chat_history = []
                 for m in st.session_state.messages[:-1]:
                     role = "user" if m["role"] == "user" else "model"
@@ -152,7 +147,6 @@ else:
                 reply = response.text
                 st.markdown(reply)
                 
-                # Reliable Audio Output Call
                 play_voice(reply)
 
                 st.session_state.messages.append({"role": "assistant", "content": reply})
