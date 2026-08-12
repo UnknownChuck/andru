@@ -32,7 +32,7 @@ You are "Andru", a highly intelligent, witty, smooth-talking, and private person
 """
 
 # ---------------------------------------------------------
-# 2. AUDIO PLAYER FUNCTION (RELIABLE VOICE OUTPUT)
+# 2. AUDIO PLAYER FUNCTION
 # ---------------------------------------------------------
 def play_voice(text):
     """Generates audio using gTTS and plays it automatically using HTML5 base64 audio."""
@@ -85,14 +85,21 @@ else:
         return ["GitHub Token not configured in Streamlit Secrets."]
 
     # ---------------------------------------------------------
-    # 5. MAIN INTERFACE & GEMINI SETUP
+    # 5. MAIN INTERFACE & GEMINI SETUP (WITH REST FIX)
     # ---------------------------------------------------------
     st.title("🤖 Andru - Personal AI Assistant (Gemini Powered)")
     
-    # Configure Gemini API Key
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    # Check Secrets
+    if "GEMINI_API_KEY" not in st.secrets:
+        st.error("Please add GEMINI_API_KEY to Streamlit Secrets!")
+        st.stop()
+
+    # Configure Gemini API with REST protocol (Fixes Streamlit gRPC error)
+    genai.configure(
+        api_key=st.secrets["GEMINI_API_KEY"],
+        transport='rest'
+    )
     
-    # Initialize Gemini Model with System Prompt
     model = genai.GenerativeModel(
         model_name="gemini-1.5-flash",
         system_instruction=ANDRU_SYSTEM_PROMPT
@@ -132,19 +139,22 @@ else:
             st.markdown(user_prompt)
 
         with st.chat_message("assistant"):
-            # Format chat history for Gemini
-            chat_history = []
-            for m in st.session_state.messages[:-1]:
-                role = "user" if m["role"] == "user" else "model"
-                chat_history.append({"role": role, "parts": [m["content"]]})
-            
-            chat = model.start_chat(history=chat_history)
-            response = chat.send_message(user_prompt)
-            
-            reply = response.text
-            st.markdown(reply)
-            
-            # Reliable Audio Output Call
-            play_voice(reply)
+            try:
+                # Format chat history for Gemini
+                chat_history = []
+                for m in st.session_state.messages[:-1]:
+                    role = "user" if m["role"] == "user" else "model"
+                    chat_history.append({"role": role, "parts": [m["content"]]})
+                
+                chat = model.start_chat(history=chat_history)
+                response = chat.send_message(user_prompt)
+                
+                reply = response.text
+                st.markdown(reply)
+                
+                # Reliable Audio Output Call
+                play_voice(reply)
 
-        st.session_state.messages.append({"role": "assistant", "content": reply})
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+            except Exception as err:
+                st.error(f"Gemini API Error: {err}")
