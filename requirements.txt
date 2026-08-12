@@ -1,5 +1,5 @@
 streamlit
-google-genai
+groq
 PyGithub
 streamlit-mic-recorder
 gTTS
