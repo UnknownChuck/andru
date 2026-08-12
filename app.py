@@ -1,6 +1,5 @@
 import streamlit as st
-from google import genai
-from google.genai import types
+from groq import Groq
 from streamlit_mic_recorder import speech_to_text
 from github import Github
 from gtts import gTTS
@@ -11,29 +10,24 @@ import base64
 st.set_page_config(page_title="Andru Private AI", page_icon="🤖", layout="wide")
 
 # ---------------------------------------------------------
-# 1. ANDRU SYSTEM PROMPT
+# 1. ANDRU SYSTEM PROMPT (LANGUAGE & SPELLING TOLERANCE)
 # ---------------------------------------------------------
 ANDRU_SYSTEM_PROMPT = """
 You are "Andru", a highly intelligent, witty, smooth-talking, and private personal AI assistant.
 
-### Key Context & User Profile:
+### Context Understanding & Robustness Instructions:
+- You are extremely adaptable to any language (English, Singlish, Sinhala, etc.).
+- You MUST understand the user even if there are severe spelling mistakes, typos, or slang. Always grasp the underlying intent smoothly without complaining about grammar or spelling.
+- Keep responses conversational, concise, natural, and straight to the point (ideal for voice output).
+
+### Key User Profile:
 - User Name: Chenuka Basilu
 - Your Role: Chenuka's personal assistant and close friend.
-- User Projects & Focus Areas:
-  1. Game Development: 2D & 3D games using HTML, JavaScript, Three.js, and Babylon.js.
-  2. 3D Modeling & Animation: Asset pipelines and low-poly modeling in Blender.
-  3. Cybersecurity & Ethical Hacking: Penetration testing, CTFs, Nmap, Hashcat, John the Ripper.
-  4. System Optimization: Legacy hardware tuning (Core 2 Duo/Quad setups, OS optimization).
-  5. Creative Writing: Sci-Fi & Fantasy projects like "FOL: Reborn" and "PROJECT NONAME: THE THREE HOLLOWS".
-  6. Personal AI (Andru): Self-hosted AI ecosystem with Gemini, Streamlit, ChromaDB, and local speech controls.
-
-### Response Instructions:
-- Speak directly to Chenuka in a friendly, intelligent, and natural tone.
-- Keep responses short, clear, and natural for voice synthesis.
+- User Focus Areas: Game Dev (HTML/JS/3D), Blender 3D, Cybersecurity (Nmap/Hashcat), System Tuning, Creative Writing ("FOL: Reborn").
 """
 
 # ---------------------------------------------------------
-# 2. AUDIO PLAYER FUNCTION
+# 2. RELIABLE AUDIO PLAYER
 # ---------------------------------------------------------
 def play_voice(text):
     """Generates audio using gTTS and plays it automatically using HTML5 base64 audio."""
@@ -86,19 +80,16 @@ else:
         return ["GitHub Token not configured in Streamlit Secrets."]
 
     # ---------------------------------------------------------
-    # 5. MAIN INTERFACE & GEMINI CLIENT (FORCE V1 API)
+    # 5. MAIN INTERFACE & GROQ SETUP
     # ---------------------------------------------------------
     st.title("🤖 Andru - Personal AI Assistant")
     
-    if "GEMINI_API_KEY" not in st.secrets:
-        st.error("Please add GEMINI_API_KEY to Streamlit Secrets!")
+    if "GROQ_API_KEY" not in st.secrets:
+        st.error("Please add GROQ_API_KEY to Streamlit Secrets!")
         st.stop()
 
-    # Explicitly use api_version='v1' to avoid v1beta 404 errors
-    client = genai.Client(
-        api_key=st.secrets["GEMINI_API_KEY"],
-        http_options={'api_version': 'v1'}
-    )
+    # Initialize Groq Client
+    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -135,30 +126,19 @@ else:
 
         with st.chat_message("assistant"):
             try:
-                # Format conversation history
-                contents = []
-                for m in st.session_state.messages:
-                    role = "user" if m["role"] == "user" else "model"
-                    contents.append(
-                        types.Content(
-                            role=role,
-                            parts=[types.Part.from_text(text=m["content"])]
-                        )
-                    )
-
-                # Send request using standard stable model
-                response = client.models.generate_content(
-                    model='gemini-1.5-flash',
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=ANDRU_SYSTEM_PROMPT,
-                    ),
+                sys_prompt = {"role": "system", "content": ANDRU_SYSTEM_PROMPT}
+                
+                # Using Llama-3.3-70b for ultimate accuracy, spelling tolerance and speed
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[sys_prompt] + st.session_state.messages
                 )
                 
-                reply = response.text
+                reply = response.choices[0].message.content
                 st.markdown(reply)
+                
                 play_voice(reply)
 
                 st.session_state.messages.append({"role": "assistant", "content": reply})
             except Exception as err:
-                st.error(f"Gemini API Error: {err}")
+                st.error(f"Groq API Error: {err}")
