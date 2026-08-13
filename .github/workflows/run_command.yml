@@ -1,0 +1,34 @@
+name: Andru Command Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Command to run'
+        required: true
+        default: 'echo "Hello"'
+
+jobs:
+  run-cmd:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Run user command
+        run: |
+          sudo apt-get update
+          # මෙතැනදී user ඉල්ලන command එක run වෙයි
+          ${{ github.event.inputs.command }} > output.txt || echo "Command failed" > output.txt
+
+      - name: Save output to andru-storage
+        uses: dmnemec/copy_file_to_another_repo_action@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          source_file: 'output.txt'
+          destination_repo: 'andru-storage'
+          destination_folder: 'logs'
+          user_email: 'andru@ai.com'
+          user_name: 'Andru AI'
+          commit_message: 'Automated command output from Andru'
