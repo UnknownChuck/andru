@@ -15,11 +15,11 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Run user command
+      - name: Run user command and save output
         run: |
-          sudo apt-get update
-          # මෙතැනදී user ඉල්ලන command එක run වෙයි
-          ${{ github.event.inputs.command }} > output.txt || echo "Command failed" > output.txt
+          echo "Running command..."
+          ${{ github.event.inputs.command }} > output.txt 2>&1 || echo "Command executed with errors" >> output.txt
+          cat output.txt
 
       - name: Save output to andru-storage
         uses: dmnemec/copy_file_to_another_repo_action@main
