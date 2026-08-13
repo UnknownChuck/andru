@@ -121,7 +121,7 @@ else:
         """Triggers a GitHub Action workflow to execute a terminal command remotely."""
         if "GITHUB_TOKEN" in st.secrets:
             try:
-                repo_name = "UnknownChuck/Andru-AI"  # ඔයාගේ main repository එක
+                repo_name = "UnknownChuck/andru"  # නිවැරදි කළ Repository නම
                 url = f"https://api.github.com/repos/{repo_name}/actions/workflows/run_command.yml/dispatches"
                 
                 headers = {
@@ -233,7 +233,7 @@ else:
                             "type": "function",
                             "function": {
                                 "name": "trigger_github_action",
-                                "description": "Triggers a GitHub Action workflow to execute a terminal command remotely (like installing nmap and scanning).",
+                                "description": "Triggers a GitHub Action workflow to execute a terminal command remotely.",
                                 "parameters": {
                                     "type": "object",
                                     "properties": {
