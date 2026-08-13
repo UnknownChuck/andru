@@ -5,17 +5,18 @@ from gtts import gTTS
 import io
 import base64
 import json
+import requests
 
 # Page Configuration
 st.set_page_config(page_title="Andru Private AI", page_icon="🤖", layout="wide")
 
 # ---------------------------------------------------------
-# 1. ANDRU SYSTEM PROMPT
+# 1. ANDRU SYSTEM PROMPT (WITH CODESPACE CAPABILITIES)
 # ---------------------------------------------------------
 ANDRU_SYSTEM_PROMPT = """
 You are "Andru", an advanced, intelligent, witty, and private personal AI assistant for Chenuka Basilu.
 - Adaptable to any language (Sinhala, Singlish, English). Understand severe typos and spelling mistakes smoothly.
-- When saving files to 'andru-storage', do NOT dump long file contents into the chat text. Just give a clean, brief confirmation message.
+- You can save files to 'andru-storage', and you can also manage and interact with GitHub Codespaces using the available tools.
 - Keep responses conversational, natural, and precise.
 """
 
@@ -26,7 +27,6 @@ def play_voice(text):
     try:
         has_sinhala = any('\u0D80' <= c <= '\u0DFF' for c in text)
         lang_code = 'si' if has_sinhala else 'en'
-        
         tld_choice = 'co.uk' if lang_code == 'en' else 'lk'
         
         tts = gTTS(text=text, lang=lang_code, tld=tld_choice, slow=False)
@@ -64,7 +64,7 @@ if not st.session_state.authenticated:
             st.error("Wrong password! Access Denied.")
 else:
     # ---------------------------------------------------------
-    # 4. GITHUB SAVE FUNCTION (Forces 'andru-storage')
+    # 4. TOOLS (GitHub Storage & Codespaces Integration)
     # ---------------------------------------------------------
     def save_to_github(file_path, file_content, commit_message):
         repo_name = "andru-storage"
@@ -72,7 +72,6 @@ else:
             try:
                 g = Github(st.secrets["GITHUB_TOKEN"])
                 user = g.get_user()
-                
                 try:
                     repo = user.get_repo(repo_name)
                 except:
@@ -87,6 +86,29 @@ else:
                     return f"Successfully created '{file_path}' in 'andru-storage'."
             except Exception as e:
                 return f"GitHub Error: {e}"
+        return "Error: GITHUB_TOKEN not found."
+
+    def list_user_codespaces():
+        """Lists active GitHub Codespaces for the user"""
+        if "GITHUB_TOKEN" in st.secrets:
+            try:
+                headers = {
+                    "Authorization": f"Bearer {st.secrets['GITHUB_TOKEN']}",
+                    "Accept": "application/vnd.github+json"
+                }
+                response = requests.get("https://api.github.com/user/codespaces", headers=headers)
+                if response.status_code == 200:
+                    codespaces = response.json().get("codespaces", [])
+                    if not codespaces:
+                        return "No active Codespaces found."
+                    result = []
+                    for cs in codespaces:
+                        result.append(f"Name: {cs['name']}, Repo: {cs['repository']['full_name']}, State: {cs['state']}")
+                    return "\n".join(result)
+                else:
+                    return f"Failed to fetch codespaces: {response.text}"
+            except Exception as e:
+                return f"Error: {e}"
         return "Error: GITHUB_TOKEN not found."
 
     # ---------------------------------------------------------
@@ -167,6 +189,14 @@ else:
                                     "required": ["file_path", "file_content", "commit_message"]
                                 }
                             }
+                        },
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": "list_user_codespaces",
+                                "description": "List all active GitHub Codespaces associated with the user account.",
+                                "parameters": {"type": "object", "properties": {}}
+                            }
                         }
                     ]
 
@@ -182,19 +212,26 @@ else:
                     if response_message.tool_calls:
                         messages.append(response_message)
                         for tool_call in response_message.tool_calls:
-                            if tool_call.function.name == "save_to_github":
-                                args = json.loads(tool_call.function.arguments)
+                            func_name = tool_call.function.name
+                            args = json.loads(tool_call.function.arguments or "{}")
+                            
+                            if func_name == "save_to_github":
                                 tool_result = save_to_github(
                                     file_path=args.get("file_path"),
                                     file_content=args.get("file_content"),
                                     commit_message=args.get("commit_message")
                                 )
-                                messages.append({
-                                    "tool_call_id": tool_call.id,
-                                    "role": "tool",
-                                    "name": "save_to_github",
-                                    "content": tool_result
-                                })
+                            elif func_name == "list_user_codespaces":
+                                tool_result = list_user_codespaces()
+                            else:
+                                tool_result = "Unknown tool."
+                                
+                            messages.append({
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "name": func_name,
+                                "content": tool_result
+                            })
                         
                         second_response = client.chat.completions.create(
                             model="llama-3.3-70b-versatile",
