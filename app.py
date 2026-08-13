@@ -16,7 +16,7 @@ st.set_page_config(page_title="Andru Private AI", page_icon="🤖", layout="wide
 ANDRU_SYSTEM_PROMPT = """
 You are "Andru", an advanced, intelligent, witty, and private personal AI assistant for Chenuka Basilu.
 - Adaptable to any language (Sinhala, Singlish, English). Understand severe typos and spelling mistakes smoothly.
-- When saving files, if the content is long or has special characters, encode it in base64 or provide clean text to avoid tool errors.
+- You can save files to 'andru-storage' and trigger GitHub Actions to run terminal commands remotely in the repository environment.
 - Keep responses conversational, natural, and precise.
 """
 
@@ -64,18 +64,17 @@ if not st.session_state.authenticated:
             st.error("Wrong password! Access Denied.")
 else:
     # ---------------------------------------------------------
-    # 4. TOOLS (GitHub Storage & Codespaces Integration)
+    # 4. TOOLS (GitHub Storage, Codespaces & Actions Integration)
     # ---------------------------------------------------------
     def save_to_github(file_path, file_content, commit_message):
         repo_name = "andru-storage"
         if "GITHUB_TOKEN" in st.secrets:
             try:
-                # Handle base64 decoded content safely if model encodes it
                 try:
                     decoded_bytes = base64.b64decode(file_content)
                     file_content = decoded_bytes.decode('utf-8')
                 except:
-                    pass # Keep as is if it's plain text
+                    pass
 
                 g = Github(st.secrets["GITHUB_TOKEN"])
                 user = g.get_user()
@@ -114,6 +113,31 @@ else:
                     return "\n".join(result)
                 else:
                     return f"Failed to fetch codespaces: {response.text}"
+            except Exception as e:
+                return f"Error: {e}"
+        return "Error: GITHUB_TOKEN not found."
+
+    def trigger_github_action(command_to_run):
+        """Triggers a GitHub Action workflow to execute a terminal command remotely."""
+        if "GITHUB_TOKEN" in st.secrets:
+            try:
+                repo_name = "UnknownChuck/Andru-AI"  # ඔයාගේ main repository එක
+                url = f"https://api.github.com/repos/{repo_name}/actions/workflows/run_command.yml/dispatches"
+                
+                headers = {
+                    "Authorization": f"Bearer {st.secrets['GITHUB_TOKEN']}",
+                    "Accept": "application/vnd.github+json"
+                }
+                payload = {
+                    "ref": "main",
+                    "inputs": {"command": command_to_run}
+                }
+                
+                response = requests.post(url, json=payload, headers=headers)
+                if response.status_code == 204:
+                    return f"Successfully triggered background execution for command: '{command_to_run}'. Check 'andru-storage' in a moment for results!"
+                else:
+                    return f"Failed to trigger action: {response.text}"
             except Exception as e:
                 return f"Error: {e}"
         return "Error: GITHUB_TOKEN not found."
@@ -185,12 +209,12 @@ else:
                             "type": "function",
                             "function": {
                                 "name": "save_to_github",
-                                "description": "Save code or files into 'andru-storage'. You can pass plain text or base64 encoded content for safe transmission.",
+                                "description": "Save code or files into 'andru-storage'.",
                                 "parameters": {
                                     "type": "object",
                                     "properties": {
                                         "file_path": {"type": "string", "description": "The file name with path (e.g., calculator.py)"},
-                                        "file_content": {"type": "string", "description": "The file content (plain text or base64)"},
+                                        "file_content": {"type": "string", "description": "The file content"},
                                         "commit_message": {"type": "string", "description": "Commit message"}
                                     },
                                     "required": ["file_path", "file_content", "commit_message"]
@@ -203,6 +227,20 @@ else:
                                 "name": "list_user_codespaces",
                                 "description": "List all active GitHub Codespaces associated with the user account.",
                                 "parameters": {"type": "object", "properties": {}}
+                            }
+                        },
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": "trigger_github_action",
+                                "description": "Triggers a GitHub Action workflow to execute a terminal command remotely (like installing nmap and scanning).",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "command_to_run": {"type": "string", "description": "The bash command to execute in the workflow runner."}
+                                    },
+                                    "required": ["command_to_run"]
+                                }
                             }
                         }
                     ]
@@ -230,6 +268,10 @@ else:
                                 )
                             elif func_name == "list_user_codespaces":
                                 tool_result = list_user_codespaces()
+                            elif func_name == "trigger_github_action":
+                                tool_result = trigger_github_action(
+                                    command_to_run=args.get("command_to_run")
+                                )
                             else:
                                 tool_result = "Unknown tool."
                                 
