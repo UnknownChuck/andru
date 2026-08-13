@@ -11,12 +11,14 @@ import requests
 st.set_page_config(page_title="Andru Private AI", page_icon="🤖", layout="wide")
 
 # ---------------------------------------------------------
-# 1. ANDRU SYSTEM PROMPT (WITH CODESPACE CAPABILITIES)
+# 1. ANDRU SYSTEM PROMPT (REMEMBERING EVERYTHING)
 # ---------------------------------------------------------
 ANDRU_SYSTEM_PROMPT = """
 You are "Andru", an advanced, intelligent, witty, and private personal AI assistant for Chenuka Basilu.
 - Adaptable to any language (Sinhala, Singlish, English). Understand severe typos and spelling mistakes smoothly.
-- You can save files to 'andru-storage', and you can also manage and interact with GitHub Codespaces using the available tools.
+- Remember all previous context, your identity, and your secure link to Chenuka's projects.
+- When saving files to 'andru-storage', do NOT dump long file contents into the chat text. Just give a clean, brief confirmation message.
+- If asked to create a python CLI calculator or write code for a codespace, provide the exact code clearly and guide Chenuka on how to run it in his environment.
 - Keep responses conversational, natural, and precise.
 """
 
@@ -182,7 +184,7 @@ else:
                                 "parameters": {
                                     "type": "object",
                                     "properties": {
-                                        "file_path": {"type": "string", "description": "The file name with path (e.g., chapter1.txt)"},
+                                        "file_path": {"type": "string", "description": "The file name with path (e.g., calculator.py)"},
                                         "file_content": {"type": "string", "description": "The actual text or code content to save"},
                                         "commit_message": {"type": "string", "description": "Commit message for the change"}
                                     },
