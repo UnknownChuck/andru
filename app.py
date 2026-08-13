@@ -11,14 +11,12 @@ import requests
 st.set_page_config(page_title="Andru Private AI", page_icon="🤖", layout="wide")
 
 # ---------------------------------------------------------
-# 1. ANDRU SYSTEM PROMPT (REMEMBERING EVERYTHING)
+# 1. ANDRU SYSTEM PROMPT
 # ---------------------------------------------------------
 ANDRU_SYSTEM_PROMPT = """
 You are "Andru", an advanced, intelligent, witty, and private personal AI assistant for Chenuka Basilu.
 - Adaptable to any language (Sinhala, Singlish, English). Understand severe typos and spelling mistakes smoothly.
-- Remember all previous context, your identity, and your secure link to Chenuka's projects.
-- When saving files to 'andru-storage', do NOT dump long file contents into the chat text. Just give a clean, brief confirmation message.
-- If asked to create a python CLI calculator or write code for a codespace, provide the exact code clearly and guide Chenuka on how to run it in his environment.
+- When saving files, if the content is long or has special characters, encode it in base64 or provide clean text to avoid tool errors.
 - Keep responses conversational, natural, and precise.
 """
 
@@ -72,6 +70,13 @@ else:
         repo_name = "andru-storage"
         if "GITHUB_TOKEN" in st.secrets:
             try:
+                # Handle base64 decoded content safely if model encodes it
+                try:
+                    decoded_bytes = base64.b64decode(file_content)
+                    file_content = decoded_bytes.decode('utf-8')
+                except:
+                    pass # Keep as is if it's plain text
+
                 g = Github(st.secrets["GITHUB_TOKEN"])
                 user = g.get_user()
                 try:
@@ -180,13 +185,13 @@ else:
                             "type": "function",
                             "function": {
                                 "name": "save_to_github",
-                                "description": "Save code, lore, notes, or files directly into the 'andru-storage' GitHub repository.",
+                                "description": "Save code or files into 'andru-storage'. You can pass plain text or base64 encoded content for safe transmission.",
                                 "parameters": {
                                     "type": "object",
                                     "properties": {
                                         "file_path": {"type": "string", "description": "The file name with path (e.g., calculator.py)"},
-                                        "file_content": {"type": "string", "description": "The actual text or code content to save"},
-                                        "commit_message": {"type": "string", "description": "Commit message for the change"}
+                                        "file_content": {"type": "string", "description": "The file content (plain text or base64)"},
+                                        "commit_message": {"type": "string", "description": "Commit message"}
                                     },
                                     "required": ["file_path", "file_content", "commit_message"]
                                 }
